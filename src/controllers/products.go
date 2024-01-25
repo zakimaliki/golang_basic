@@ -98,3 +98,34 @@ func Data_product(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method tidak diizinkan", http.StatusMethodNotAllowed)
 	}
 }
+
+func Handle_upload(w http.ResponseWriter, r *http.Request) {
+
+	// Memeriksa method request, harus POST
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Mendapatkan file dari form
+	file, handler, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	helper.ValidateUpload(w, handler)
+	helper.Upload(w, file, handler)
+
+	// Menyampaikan respons berhasil
+	msg := map[string]string{
+		"Message": "File uploaded successfully",
+	}
+	res, err := json.Marshal(msg)
+	if err != nil {
+		http.Error(w, "Gagal Konversi Json", http.StatusInternalServerError)
+		return
+	}
+	w.Write(res)
+}

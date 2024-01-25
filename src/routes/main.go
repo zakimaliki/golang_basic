@@ -16,4 +16,6 @@ func Router() {
 	})
 	http.Handle("/products", helmet.Secure(middleware.XssMiddleware(http.HandlerFunc(controllers.Data_products))))
 	http.Handle("/product/", helmet.Secure(middleware.XssMiddleware(http.HandlerFunc(controllers.Data_product))))
+	http.Handle("/upload", http.HandlerFunc(controllers.Handle_upload))
+
 }
