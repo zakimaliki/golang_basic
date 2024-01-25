@@ -11,6 +11,10 @@ import (
 )
 
 func main() {
+	// instal linter
+	// go get github.com/golangci/golangci-lint/cmd/golangci-lint
+	// run linter
+	// go test -run=^$ -v ./...
 	gotenv.Load()
 	config.InitDB()
 	helper.Migration()

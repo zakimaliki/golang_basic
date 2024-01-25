@@ -2,11 +2,15 @@ package controllers
 
 import (
 	"encoding/json"
+	"golang-be-batch1/src/helper"
+	"golang-be-batch1/src/middleware"
 	"golang-be-batch1/src/models"
 	"net/http"
 )
 
 func Data_products(w http.ResponseWriter, r *http.Request) {
+	middleware.GetCleanedInput(r)
+	helper.EnableCors(w)
 	if r.Method == "GET" {
 		res, err := json.Marshal(models.SelectAll().Value)
 		if err != nil {
@@ -23,11 +27,6 @@ func Data_products(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		// if product.Id <= 0 || product.Name == "" || product.Price <= 0 || product.Stock <= 0 {
-		// 	w.WriteHeader(http.StatusBadRequest)
-		// 	fmt.Fprintf(w, "Invalid product data")
-		// 	return
-		// }
 		item := models.Product{
 			Name:  product.Name,
 			Price: product.Price,
@@ -50,6 +49,8 @@ func Data_products(w http.ResponseWriter, r *http.Request) {
 }
 
 func Data_product(w http.ResponseWriter, r *http.Request) {
+	middleware.GetCleanedInput(r)
+	helper.EnableCors(w)
 	id := r.URL.Path[len("/product/"):]
 
 	if r.Method == "GET" {
@@ -67,11 +68,6 @@ func Data_product(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		// if updateProduct.Id <= 0 || updateProduct.Name == "" || updateProduct.Price <= 0 || updateProduct.Stock <= 0 {
-		// 	w.WriteHeader(http.StatusBadRequest)
-		// 	fmt.Fprintf(w, "Invalid product data")
-		// 	return
-		// }
 		newProduct := models.Product{
 			Name:  updateProduct.Name,
 			Price: updateProduct.Price,
