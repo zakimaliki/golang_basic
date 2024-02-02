@@ -36,3 +36,21 @@ func Deletes(id string) *gorm.DB {
 	var item Product
 	return config.DB.Delete(&item, "id = ?", id)
 }
+
+func FindData(name string) *gorm.DB {
+	items := []Product{}
+	name = "%" + name + "%"
+	return config.DB.Where("name LIKE ?", name).Find(&items)
+}
+
+func FindCond(sort string, limit int, offset int) *gorm.DB {
+	items := []Product{}
+	return config.DB.Order(sort).Limit(limit).Offset(offset).Find(&items)
+}
+
+func CountData() int {
+	var result int
+	config.DB.Table("products").Count(&result)
+	return result
+
+}
