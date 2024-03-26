@@ -3,10 +3,8 @@ package controllers
 import (
 	"encoding/json"
 	"fmt"
-	"golang-be-batch1/src/helper"
 	"golang-be-batch1/src/middleware"
 	"golang-be-batch1/src/models"
-	"io"
 	"math"
 	"net/http"
 	"os"
@@ -14,16 +12,36 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/cloudinary/cloudinary-go"
+	"github.com/cloudinary/cloudinary-go/api/uploader"
 )
 
 func Data_products(w http.ResponseWriter, r *http.Request) {
-	middleware.GetCleanedInput(r)
-	helper.EnableCors(w)
+	// Set header CORS untuk memungkinkan akses dari localhost:3000
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+	// Menangani permintaan OPTIONS
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Menangani permintaan GET
 	if r.Method == "GET" {
 		pageOld := r.URL.Query().Get("page")
 		limitOld := r.URL.Query().Get("limit")
 		page, _ := strconv.Atoi(pageOld)
+		if page == 0 {
+			page = 1
+		}
 		limit, _ := strconv.Atoi(limitOld)
+		if limit == 0 {
+			limit = 5
+		}
 		offset := (page - 1) * limit
 		sort := r.URL.Query().Get("sort")
 		if sort == "" {
@@ -45,15 +63,19 @@ func Data_products(w http.ResponseWriter, r *http.Request) {
 			"totalData":   totalData,
 			"totalPage":   totalPage,
 		}
+		// Mengirim respons JSON
+		w.Header().Set("Content-Type", "application/json")
 		res, err := json.Marshal(result)
 		if err != nil {
 			http.Error(w, "Gagal Konversi Json", http.StatusInternalServerError)
 			return
 		}
 		w.Write(res)
-		w.Header().Set("Content-Type", "application/json")
 		return
-	} else if r.Method == "POST" {
+	}
+
+	// Menangani permintaan POST
+	if r.Method == "POST" {
 		var product models.Product
 		err := json.NewDecoder(r.Body).Decode(&product)
 		if err != nil {
@@ -66,24 +88,38 @@ func Data_products(w http.ResponseWriter, r *http.Request) {
 			Stock: product.Stock,
 		}
 		models.Post(&item)
+		// Mengirim respons status Created
 		w.WriteHeader(http.StatusCreated)
 		msg := map[string]string{
 			"Message": "Product Created",
 		}
+		// Mengirim respons JSON
+		w.Header().Set("Content-Type", "application/json")
 		res, err := json.Marshal(msg)
 		if err != nil {
 			http.Error(w, "Gagal Konversi Json", http.StatusInternalServerError)
 			return
 		}
 		w.Write(res)
-	} else {
-		http.Error(w, "method tidak diizinkan", http.StatusMethodNotAllowed)
+		return
 	}
+
+	// Menangani permintaan selain GET dan POST
+	http.Error(w, "method tidak diizinkan", http.StatusMethodNotAllowed)
 }
 
 func Data_product(w http.ResponseWriter, r *http.Request) {
 	middleware.GetCleanedInput(r)
-	helper.EnableCors(w)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS,PUT,DELETE")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	// Check the request method
+	if r.Method == "OPTIONS" {
+		// Respond to preflight requests
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	id := r.URL.Path[len("/product/"):]
 
 	if r.Method == "GET" {
@@ -137,6 +173,7 @@ func Handle_upload(w http.ResponseWriter, r *http.Request) {
 		AllowedExtensions = ".jpg,.jpeg,.pdf,.png"
 		MaxFileSize       = 2 << 20 // 2 MB
 	)
+
 	// Memeriksa method request, harus POST
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -173,21 +210,29 @@ func Handle_upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Menggunakan timestamp untuk membuat nama file unik
 	timestamp := time.Now().Format("20060102_150405")
 
-	// Membuat nama unik untuk file
-	filename := fmt.Sprintf("src/uploads/%s_%s", timestamp, handler.Filename)
-
-	// Membuat file untuk menyimpan gambar
-	out, err := os.Create(filename)
+	// Menginisialisasi konfigurasi Cloudinary
+	cloudinaryURL := os.Getenv("CLOUDINARY_URL") // Ambil URL Cloudinary dari variabel lingkungan
+	if cloudinaryURL == "" {
+		http.Error(w, "Cloudinary URL not found", http.StatusInternalServerError)
+		return
+	}
+	cld, err := cloudinary.NewFromURL(cloudinaryURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer out.Close()
 
-	// Menyalin isi file yang diupload ke file yang baru dibuat
-	_, err = io.Copy(out, file)
+	// Konfigurasi uploader Cloudinary
+	uploadParams := uploader.UploadParams{
+		PublicID:  fmt.Sprintf("%s_%s", timestamp, handler.Filename),
+		Overwrite: true,
+	}
+
+	// Mengunggah file ke Cloudinary
+	uploadResult, err := cld.Upload.Upload(r.Context(), file, uploadParams)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -195,11 +240,15 @@ func Handle_upload(w http.ResponseWriter, r *http.Request) {
 
 	// Menyampaikan respons berhasil
 	msg := map[string]string{
-		"Message": "File uploaded successfully",
+		"Message":        "File uploaded successfully",
+		"PublicID":       uploadResult.PublicID,
+		"SecureURL":      uploadResult.SecureURL,
+		"OriginalWidth":  fmt.Sprintf("%d", uploadResult.Width),
+		"OriginalHeight": fmt.Sprintf("%d", uploadResult.Height),
 	}
 	res, err := json.Marshal(msg)
 	if err != nil {
-		http.Error(w, "Gagal Konversi Json", http.StatusInternalServerError)
+		http.Error(w, "Failed to convert JSON", http.StatusInternalServerError)
 		return
 	}
 	w.Write(res)
